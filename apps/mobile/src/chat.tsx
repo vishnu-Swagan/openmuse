@@ -241,7 +241,11 @@ export function ChatScreen({
           const { messages } = await api.request<{ messages: Message[] }>("/api/conversation");
           if (active) agent.setMessages(messages);
         }
-        if (active) setLoaded(true);
+        if (active) {
+          setLoaded(true);
+          // Replayed failures belong to old turns; the restored chat is usable.
+          setError("");
+        }
       } catch (e) {
         if (active) {
           setLoaded(false);

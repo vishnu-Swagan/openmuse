@@ -14,6 +14,13 @@ your provider account, including its own vendor prefix. Select a model supportin
 streaming and function/tool calls. Changing `MODEL` and restarting the server
 switches providers; no app rebuild is needed.
 
+Gateway requests default to a maximum of 2,048 output tokens per model call to
+avoid reserving large amounts of provider credit for short replies. Set the
+server environment variable `MODEL_MAX_OUTPUT_TOKENS` to a positive integer to
+adjust this cap. Reasoning models may count reasoning tokens against this cap;
+increase it if longer answers are cut off. Account balances and key spending
+limits still apply.
+
 Both adapters use Chat Completions and send each key only to its provider's
 endpoint. `OPENAI_BASE_URL` does not override these two endpoints. An OpenAI
 account or `OPENAI_API_KEY` is not required when using either provider.

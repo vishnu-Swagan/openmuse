@@ -13,7 +13,7 @@ import { createOpenaiChatCompletions, type OpenAIChatModel, openaiText } from "@
 import { map, mergeMap, type Observable } from "rxjs";
 import { z } from "zod";
 import { MODEL_MAX_RETRIES, required } from "../config.ts";
-import { compatibleProviders } from "./model-provider.ts";
+import { compatibleProviders, gatewayModelOptions } from "./model-provider.ts";
 
 // Same "provider/model" strings, env vars and base URL formats as the AI SDK resolver in
 // @copilotkit/runtime. Each provider SDK retries transient failures up to MODEL_MAX_RETRIES times.
@@ -135,6 +135,7 @@ export function tanstackAgent(options: {
         system += `\n## Application State\nThis is state from the application that you can edit by calling AGUISendStateSnapshot or AGUISendStateDelta.\n\`\`\`json\n${JSON.stringify(input.state, null, 2)}\n\`\`\`\n`;
       return chat({
         adapter: adapter(options.model),
+        modelOptions: gatewayModelOptions(options.model),
         messages: converted.messages,
         systemPrompts: system ? [system] : [],
         tools: [

@@ -13,6 +13,16 @@ export const compatibleProviders = {
   nvidia: { key: "NVIDIA_API_KEY", url: "https://integrate.api.nvidia.com/v1" },
 } as const;
 
+export function gatewayModelOptions(model: string) {
+  const provider = model.trim().split(/[/:]/, 1)[0]?.toLowerCase();
+  if (provider !== "openrouter" && provider !== "nvidia") return undefined;
+  const maxTokens = Number(process.env.MODEL_MAX_OUTPUT_TOKENS ?? 2048);
+  if (!Number.isSafeInteger(maxTokens) || maxTokens < 1)
+    throw new Error("MODEL_MAX_OUTPUT_TOKENS must be a positive integer");
+  // Bound gateway credit reservations instead of accepting their large default.
+  return { max_tokens: maxTokens };
+}
+
 export function modelKeyConfigured(model?: string) {
   const [, provider = "", id = ""] = model?.trim().match(/^([^/:]*)[/:](.*)$/) ?? [];
   const key = providerKeys[provider.toLowerCase()];

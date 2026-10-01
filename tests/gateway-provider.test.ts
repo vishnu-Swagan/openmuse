@@ -4,7 +4,10 @@ import { EventType } from "@ag-ui/core";
 import { defineTool } from "@copilotkit/runtime/v2";
 import { lastValueFrom, toArray } from "rxjs";
 import { z } from "zod";
-import { modelKeyConfigured } from "../apps/server/src/engine/model-provider.ts";
+import {
+  gatewayModelOptions,
+  modelKeyConfigured,
+} from "../apps/server/src/engine/model-provider.ts";
 import { tanstackAgent } from "../apps/server/src/engine/tanstack-agent.ts";
 
 for (const provider of ["openrouter", "nvidia"] as const) {
@@ -102,11 +105,29 @@ for (const provider of ["openrouter", "nvidia"] as const) {
       assert.equal(request.auth, `Bearer fixture-${provider}-key`);
       assert.equal(request.body.model, "vendor/model");
       assert.equal(request.body.stream, true);
+      assert.equal(request.body.max_tokens, 2048);
     }
     assert.match(JSON.stringify(requests[1].body.messages), /"role":"tool"/);
     assert.match(JSON.stringify(requests[1].body.messages), /found/);
   });
 }
+
+test("gateway output caps are configurable and do not affect native providers", () => {
+  const before = process.env.MODEL_MAX_OUTPUT_TOKENS;
+  try {
+    process.env.MODEL_MAX_OUTPUT_TOKENS = "3000";
+    assert.deepEqual(gatewayModelOptions("openrouter/openai/gpt-5"), { max_tokens: 3000 });
+    assert.deepEqual(gatewayModelOptions("nvidia/meta/llama-3.3-70b-instruct"), {
+      max_tokens: 3000,
+    });
+    assert.equal(gatewayModelOptions("openai/gpt-5"), undefined);
+    process.env.MODEL_MAX_OUTPUT_TOKENS = "0";
+    assert.throws(() => gatewayModelOptions("openrouter/openai/gpt-5"), /positive integer/);
+  } finally {
+    if (before === undefined) delete process.env.MODEL_MAX_OUTPUT_TOKENS;
+    else process.env.MODEL_MAX_OUTPUT_TOKENS = before;
+  }
+});
 
 test("readiness requires the key belonging to the selected model", () => {
   const before = { ...process.env };

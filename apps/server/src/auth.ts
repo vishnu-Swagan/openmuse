@@ -21,12 +21,16 @@ export class Auth {
     )
       throw new AppError("Access key is incorrect", 401);
     const token = randomBytes(32).toString("base64url");
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
     await this.db.put("system", "sessions", {
       id: digest(token).toString("hex"),
       owner: "local-user",
-      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      expiresAt,
     });
-    return { token, mode: this.config.mode };
+    return { token, mode: this.config.mode, expiresAt };
+  }
+  async signOut(authorization: string) {
+    await this.db.remove("system", "sessions", digest(authorization.slice(7)).toString("hex"));
   }
   async owner(authorization?: string) {
     if (!authorization?.startsWith("Bearer ")) throw new AppError("Sign in to OpenMuse", 401);

@@ -16,8 +16,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
+  Platform,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   useWindowDimensions,
   View,
@@ -32,15 +34,18 @@ import {
   IdeasScreen,
 } from "./src/agent-ui";
 import { AgentWorkspaceProvider, useAgentWorkspace } from "./src/agent-workspace";
-import { API_URL, createSession, MuseApi } from "./src/api";
+import { API_URL, ApiError, createSession, MuseApi } from "./src/api";
 import { ChatScreen, WorkspaceTools } from "./src/chat";
 import { ComputerEntry } from "./src/computer";
 import { ComputerDraftProvider } from "./src/computer-drafts";
 import { Details } from "./src/details";
+import { sessionStore } from "./src/saved-session";
 import { BrowserScreen, CalendarScreen, FilesScreen, MailScreen } from "./src/screens";
 import { ThreadsProvider, ThreadsSheet, useMuseThread } from "./src/threads";
 import { Button, Card, colors, ErrorNotice, Field, IconButton, Mascot, s } from "./src/ui";
 import { type Detail, useWorkspace, WorkspaceContext } from "./src/workspace";
+
+const sessions = sessionStore(API_URL);
 
 const nav: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "chat", label: "Chat", icon: MessageCircle },
@@ -69,23 +74,56 @@ const titles: Partial<Record<Section, { title: string; subtitle: string }>> = {
 export default function App() {
   const [token, setToken] = useState("");
   const [accessKey, setAccessKey] = useState("");
+  const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
-  const connect = useCallback(async (key?: string) => {
+  const connect = useCallback(async (key?: string, save = false, automatic = false) => {
     setBusy(true);
     setError("");
     try {
       const session = await createSession(key);
+      if (save && session.mode === "live") sessions.save(session);
+      else sessions.clear();
+      setAccessKey("");
       setToken(session.token);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (!(automatic && e instanceof ApiError && e.status === 401))
+        setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   }, []);
   useEffect(() => {
-    void connect();
+    const saved = sessions.read();
+    if (!saved) {
+      void connect(undefined, false, true);
+      return;
+    }
+    void new MuseApi(saved.token)
+      .request("/api/session")
+      .then(() => {
+        setToken(saved.token);
+        setRemember(true);
+      })
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 401) {
+          sessions.clear();
+          setError("Your session expired. Enter your workspace access key to sign in again.");
+        } else setError("Could not reconnect. Check your connection and refresh to try again.");
+      })
+      .finally(() => setBusy(false));
   }, [connect]);
+  const signOut = useCallback(async () => {
+    try {
+      await new MuseApi(token).request("/api/session", undefined, "DELETE");
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 401)) throw e;
+    }
+    sessions.clear();
+    setToken("");
+    setAccessKey("");
+    setError("");
+  }, [token]);
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
@@ -94,7 +132,7 @@ export default function App() {
           runtimeUrl={`${API_URL}/api/copilotkit`}
           headers={{ Authorization: `Bearer ${token}` }}
         >
-          <WorkspaceApp token={token} />
+          <WorkspaceApp token={token} onSignOut={signOut} />
         </CopilotKitProvider>
       ) : (
         <SafeAreaView
@@ -126,12 +164,25 @@ export default function App() {
                   secureTextEntry
                   placeholder="Required for a live workspace"
                 />
-                <Button primary onPress={() => void connect(accessKey || undefined)}>
+                {Platform.OS === "web" && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Switch
+                      accessibilityLabel="Remember me on this browser for 24 hours"
+                      value={remember}
+                      onValueChange={setRemember}
+                    />
+                    <Text style={s.small}>Remember me for 24 hours</Text>
+                  </View>
+                )}
+                <Button
+                  primary
+                  onPress={() => void connect(accessKey.trim() || undefined, remember)}
+                >
                   Open workspace
                 </Button>
                 <Text style={[s.small, { marginTop: 15 }]}>
-                  Local workspaces open without a key. Make sure your OpenMuse server is running at{" "}
-                  {API_URL}.
+                  Enter the OPENMUSE_ACCESS_KEY from your server settings. This is different from
+                  your AI provider API keys.
                 </Text>
               </Card>
             )}
@@ -141,7 +192,7 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-function WorkspaceApp({ token }: { token: string }) {
+function WorkspaceApp({ token, onSignOut }: { token: string; onSignOut: () => Promise<void> }) {
   const api = useMemo(() => new MuseApi(token), [token]);
   const [workspace, setWorkspace] = useState<Workspace>();
   const [section, setSection] = useState<Section>("chat");
@@ -215,6 +266,7 @@ function WorkspaceApp({ token }: { token: string }) {
         <ComputerDraftProvider key={token}>
           <ThreadsProvider>
             <WorkspaceShell
+              onSignOut={onSignOut}
               detail={detail}
               toast={toast}
               clearToast={() => setToast("")}
@@ -228,12 +280,14 @@ function WorkspaceApp({ token }: { token: string }) {
   );
 }
 function WorkspaceShell({
+  onSignOut,
   detail,
   toast,
   clearToast,
   error,
   prompt,
 }: {
+  onSignOut: () => Promise<void>;
   detail?: Detail;
   toast: string;
   clearToast: () => void;
@@ -308,7 +362,7 @@ function WorkspaceShell({
                 onPress={() => setThreadsOpen(true)}
               />
             </View>
-            <View style={{ alignItems: "center", gap: 1 }}>
+            <View pointerEvents="box-none" style={{ alignItems: "center", gap: 1 }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${agentName} activity and approvals`}
@@ -501,7 +555,9 @@ function WorkspaceShell({
             </View>
           </View>
         )}
-        {threadsOpen && <ThreadsSheet onClose={() => setThreadsOpen(false)} />}
+        {threadsOpen && (
+          <ThreadsSheet onClose={() => setThreadsOpen(false)} onSignOut={onSignOut} />
+        )}
         {detail && (
           <Details
             key={

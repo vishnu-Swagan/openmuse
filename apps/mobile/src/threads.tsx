@@ -99,7 +99,13 @@ export function useMuseThread() {
   if (!context) throw new Error("Threads provider is unavailable");
   return context;
 }
-export function ThreadsSheet({ onClose }: { onClose: () => void }) {
+export function ThreadsSheet({
+  onClose,
+  onSignOut,
+}: {
+  onClose: () => void;
+  onSignOut: () => Promise<void>;
+}) {
   const {
     enabled,
     selection,
@@ -321,6 +327,9 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
         <LinkRow icon={Settings2} title="Apps & settings" onPress={() => go("apps")} />
         <Button small icon={RefreshCw} onPress={() => void mutate(refresh)}>
           Refresh workspace
+        </Button>
+        <Button small onPress={() => void mutate(onSignOut)}>
+          Sign out
         </Button>
       </View>
     </Sheet>

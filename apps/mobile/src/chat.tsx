@@ -235,6 +235,7 @@ export function ChatScreen({
               agentId,
               () => copilotkit.connectAgent({ agent }),
               (onError) => copilotkit.subscribe({ onError }),
+              "restore",
             );
         } else {
           const { messages } = await api.request<{ messages: Message[] }>("/api/conversation");

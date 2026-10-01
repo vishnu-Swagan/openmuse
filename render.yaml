@@ -23,7 +23,9 @@ services:
       - key: AGENT_BACKEND
         value: model
       - key: MODEL
-        value: openai/gpt-5
+        # Select one provider at a time, e.g. openrouter/openai/gpt-5
+        # or nvidia/meta/llama-3.3-70b-instruct. Both keys stay server-only.
+        sync: false
       - key: DATA_DIR
         value: /var/data/openmuse
       - key: TASK_WORKER_ENABLED
@@ -42,7 +44,9 @@ services:
         generateValue: true
       - key: TOKEN_ENCRYPTION_KEY
         generateValue: true
-      - key: OPENAI_API_KEY
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
         sync: false
       - key: CPK_INTELLIGENCE_API_KEY
         sync: false

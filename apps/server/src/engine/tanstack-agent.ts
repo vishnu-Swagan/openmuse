@@ -9,10 +9,11 @@ import {
 import { chat, maxIterations, type SchemaInput, toolDefinition } from "@tanstack/ai";
 import { type AnthropicChatModel, anthropicText } from "@tanstack/ai-anthropic";
 import { type GeminiTextModel, geminiText } from "@tanstack/ai-gemini";
-import { type OpenAIChatModel, openaiText } from "@tanstack/ai-openai";
+import { createOpenaiChatCompletions, type OpenAIChatModel, openaiText } from "@tanstack/ai-openai";
 import { map, mergeMap, type Observable } from "rxjs";
 import { z } from "zod";
-import { MODEL_MAX_RETRIES } from "../config.ts";
+import { MODEL_MAX_RETRIES, required } from "../config.ts";
+import { compatibleProviders } from "./model-provider.ts";
 
 // Same "provider/model" strings, env vars and base URL formats as the AI SDK resolver in
 // @copilotkit/runtime. Each provider SDK retries transient failures up to MODEL_MAX_RETRIES times.
@@ -24,6 +25,16 @@ function adapter(spec: string) {
     );
   const id = model.trim();
   switch (provider.toLowerCase()) {
+    case "openrouter":
+    case "nvidia": {
+      const settings =
+        compatibleProviders[provider.toLowerCase() as keyof typeof compatibleProviders];
+      return createOpenaiChatCompletions(
+        id as OpenAIChatModel,
+        required(settings.key, `${provider} requires ${settings.key}`),
+        { baseURL: settings.url, maxRetries: MODEL_MAX_RETRIES },
+      );
+    }
     case "openai":
       return openaiText(id as OpenAIChatModel, {
         baseURL: process.env.OPENAI_BASE_URL,
@@ -61,7 +72,7 @@ export function unknownProvider(
     ? ` For a model on your OPENAI_BASE_URL gateway, use "openai/${spec.trim()}".`
     : "";
   return new Error(
-    `Unknown provider "${provider}" in "${spec}". Supported: openai, anthropic, google (gemini).${hint}`,
+    `Unknown provider "${provider}" in "${spec}". Supported: openai, anthropic, google (gemini), openrouter, nvidia.${hint}`,
   );
 }
 

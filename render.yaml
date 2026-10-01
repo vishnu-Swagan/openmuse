@@ -53,7 +53,10 @@ services:
       # Delete these two entries, and the openmuse-browser service below, to
       # deploy without browsing. The API boots either way.
       - key: BROWSER_WORKER_URL
-        value: http://openmuse-browser:8790
+        fromService:
+          name: openmuse-browser
+          type: pserv
+          property: hostport
       - key: WORKER_TOKEN
         fromService:
           name: openmuse-browser
@@ -61,7 +64,7 @@ services:
           envVarKey: WORKER_TOKEN
 
   # Private Chromium for page reads, screenshots, and Take control.
-  # Remove this service to skip it. The image listens on 8790, not $PORT.
+  # Remove this service to skip it. Match Render's advertised port to the image.
   - type: pserv
     name: openmuse-browser
     runtime: docker
@@ -77,6 +80,8 @@ services:
         generateValue: true
       - key: WORKER_HOST
         value: 0.0.0.0
+      - key: PORT
+        value: 8790
       - key: WORKER_DATA_DIR
         value: /data
 
